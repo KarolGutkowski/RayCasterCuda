@@ -8,6 +8,13 @@
 #include "ray.h"
 #include "cuda_helpers/cuda_helper.h"
 #include "cpu_camera.h"
-void launchKernel(uchar3* grid, const int width, const int height, Camera cpu_camera);
+#include "camera.h"
+#include "hittable.h"
+#include "hittable_list.h"
+
+void launchKernel(uchar3* grid, const int width, const int height, hitable** d_list, hitable** d_world, camera** d_camera);
+void create_world_on_gpu(hitable** d_list, hitable** d_world, camera** d_camera, Camera cpu_camera);
+void destroy_world_resources_on_gpu(hitable** d_list, hitable** d_world, camera** d_camera);
+void update_camera_launcher(camera** d_camera, Camera cpu_camera);
 #endif // ! KERNEL_H
 

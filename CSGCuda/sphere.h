@@ -20,26 +20,26 @@ public:
             float temp = (-b - sqrt(discriminant)) / a;
             if (temp < t_max && temp > t_min) {
                 vec3 hit_point = r.at(temp);
-                if (dot(r.direction(), hit_point - r.origin()) > 0)
-                {
+                //if (dot(r.direction(), hit_point - r.origin()) > 0)
+               // {
                     rec.t = temp;
                     rec.p = hit_point;
                     rec.normal = (rec.p - center) / radius;
                     rec.color = color;
                     return true;
-                }
+                //}
             }
             temp = (-b + sqrt(discriminant)) / a;
             if (temp < t_max && temp > t_min) {
                 vec3 hit_point = r.at(temp);
-                if (dot(r.direction(), hit_point - r.origin()) > 0)
-                {
+                //if (dot(r.direction(), hit_point - r.origin()) > 0)
+                //{
                     rec.t = temp;
                     rec.p = r.at(rec.t);
                     rec.normal = (rec.p - center) / radius;
                     rec.color = color;
                     return true;
-                }
+                //}
             }
         }
         return false;

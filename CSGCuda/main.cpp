@@ -8,6 +8,7 @@
 #include <cassert>
 #include "glfw_utils/interactions.h"
 #include "cpu_camera.h"
+#include "spheres_count.h"
 
 #define WINDOW_WIDTH 1280 
 #define WINDOW_HEIGHT 720
@@ -71,20 +72,29 @@ int main(int argc, char** argv)
     double lastTime = glfwGetTime();
     int nbFrames = 0;
 
-    Camera camera = Camera();
+    Camera cpu_camera = Camera();
+
+    hitable** d_list;
+    hitable** d_world;
+    camera** d_camera;
+
+    checkCudaErrors(cudaMalloc((void**)&d_list, SPHERES_COUNT * sizeof(hitable*)));
+    checkCudaErrors(cudaMalloc((void**)&d_world, sizeof(hitable*)));
+    checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(camera*)));
+    create_world_on_gpu(d_list, d_world, d_camera, cpu_camera);
 
     while (!glfwWindowShouldClose(window))
     {
         //put those three calls into one function
-        processInput(window, camera);
-        mouse_callback(window, camera);
+        processInput(window, cpu_camera);
+        mouse_callback(window, cpu_camera);
         glfwPollEvents();
 
         cudaGraphicsGLRegisterBuffer(&cuda_pbo, pbo, cudaGraphicsRegisterFlagsWriteDiscard);
         cudaGraphicsMapResources(1, &cuda_pbo);
         cudaGraphicsResourceGetMappedPointer((void**)&grid, NULL, cuda_pbo);
-
-        launchKernel(grid, W, H, camera);
+        update_camera_launcher(d_camera, cpu_camera);
+        launchKernel(grid, W, H, d_list, d_world, d_camera);
 
         cudaGraphicsUnmapResources(1, &cuda_pbo);
 
@@ -94,7 +104,7 @@ int main(int argc, char** argv)
     }
 
     //cudaGraphicsUnmapResources(1, &cuda_pbo);
-
+    destroy_world_resources_on_gpu(d_list, d_world, d_camera);
     glDeleteBuffers(1, &pbo);
     glDeleteTextures(1, &tex);
 

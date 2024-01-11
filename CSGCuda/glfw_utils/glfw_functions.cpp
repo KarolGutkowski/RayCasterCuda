@@ -31,7 +31,7 @@ GLFWwindow* createGLFWWindow(int width, int height,const char* windowTitle)
 		exit(EXIT_FAILURE);
 	}
 
-	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
 	return window;
 }

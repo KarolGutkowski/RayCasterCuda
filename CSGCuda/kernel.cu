@@ -5,10 +5,10 @@
 #include "sphere.h"
 #include <curand.h>
 #include <curand_kernel.h>
+#include "spheres_count.h"
 
 #define THREADS_X 32
 #define THREADS_Y 32
-#define SPHERES_COUNT 10
 
 __device__ vec3 get_color(const ray& r, const hitable** world) {
 	ray cur_ray = r;
@@ -56,18 +56,21 @@ __global__ void create_world(hitable** d_list, hitable** d_world, camera** d_cam
 							float upX, float upY, float upZ);
 __global__ void free_world(hitable** d_list, hitable** d_world, camera** d_camera);
 __host__ void create_world_launcher(hitable** d_list, hitable** d_world, camera** d_camera, Camera cpu_camera);
+__global__ void update_camera(camera** d_camera,
+	float originX, float originY, float originZ,
+	float lookAtX, float lookAtY, float lookAtZ,
+	float upX, float upY, float upZ);
 
-void launchKernel(uchar3* grid, const int width, const int height, Camera cpu_camera)
+void launchKernel(uchar3* grid, const int width, const int height, hitable** d_list, hitable** d_world, camera** d_camera)
 {
-	hitable** d_list;
+	/*hitable** d_list;
 	hitable** d_world;
 	camera** d_camera;
 
 	checkCudaErrors(cudaMalloc((void**)&d_list, SPHERES_COUNT * sizeof(hitable*)));
 	checkCudaErrors(cudaMalloc((void**)&d_world, sizeof(hitable*)));
-	checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(camera*)));
+	checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(camera*)));*/
 
-	create_world_launcher(d_list, d_world, d_camera, cpu_camera);
 
 	dim3 blockDim = dim3(THREADS_X, THREADS_Y);
 	dim3 gridDim = dim3((width + THREADS_X - 1) / THREADS_X, (height + THREADS_Y - 1) / THREADS_Y);
@@ -75,8 +78,21 @@ void launchKernel(uchar3* grid, const int width, const int height, Camera cpu_ca
 	color_grid_kernel<<<gridDim, blockDim>>>(grid, width, height, d_list, d_world, d_camera);
 
 	checkCudaErrors(cudaDeviceSynchronize());
-	free_world << <1, 1 >> > (d_list, d_world, d_camera);
+	/*free_world << <1, 1 >> > (d_list, d_world, d_camera);
 	checkCudaErrors(cudaGetLastError());
+	checkCudaErrors(cudaFree(d_list));
+	checkCudaErrors(cudaFree(d_world));
+	checkCudaErrors(cudaFree(d_camera));*/
+}
+
+void create_world_on_gpu(hitable** d_list, hitable** d_world, camera** d_camera, Camera cpu_camera)
+{
+	create_world_launcher(d_list, d_world, d_camera, cpu_camera);
+}
+
+void destroy_world_resources_on_gpu(hitable** d_list, hitable** d_world, camera** d_camera)
+{
+	free_world << <1, 1 >> > (d_list, d_world, d_camera);
 	checkCudaErrors(cudaFree(d_list));
 	checkCudaErrors(cudaFree(d_world));
 	checkCudaErrors(cudaFree(d_camera));
@@ -90,6 +106,19 @@ __host__ void create_world_launcher(hitable** d_list, hitable** d_world, camera*
 	vec3 lookat = cpu_camera.getLookAt();
 
 	create_world << <1, 1 >> > (d_list, d_world, d_camera, 
+		origin.x(), origin.y(), origin.z(),
+		lookat.x(), lookat.y(), lookat.z(),
+		up.x(), up.y(), up.z());
+	checkCudaErrors(cudaGetLastError());
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+__host__ void update_camera_launcher(camera** d_camera, Camera cpu_camera)
+{
+	vec3 up = cpu_camera.getUpVector();
+	vec3 origin = cpu_camera.getOrigin();
+	vec3 lookat = cpu_camera.getLookAt();
+	update_camera << <1, 1 >> > (d_camera,
 		origin.x(), origin.y(), origin.z(),
 		lookat.x(), lookat.y(), lookat.z(),
 		up.x(), up.y(), up.z());
@@ -112,7 +141,7 @@ __global__ void create_world(hitable** d_list, hitable** d_world, camera** d_cam
 		curand_init(1984, 0, 0,&localState);
 		for (int i = 0; i < SPHERES_COUNT; i++)
 		{
-			*(d_list+i) = new sphere(vec3(-(i%10), i%3, -(i/10) - 0.5), 0.2, randomOnGPU(&localState));
+			*(d_list+i) = new sphere(vec3(-(i%10), (curand_uniform(&localState)*2), -(i/10) - 0.5), curand_uniform(&localState), randomOnGPU(&localState));
 		}
 		/**(d_list) = new sphere(vec3(0, 0, -1), 0.2, vec3(0.8f, 0.3f, 0.3f));
 		*(d_list + 1) = new sphere(vec3(1, 0, -1), 0.3, vec3(0.4f, 0.9f, 0.3f));
@@ -121,6 +150,17 @@ __global__ void create_world(hitable** d_list, hitable** d_world, camera** d_cam
 		*d_camera = new camera(vec3(originX, originY, originZ), vec3(lookAtX, lookAtY, lookAtZ), vec3(upX, upY, upZ), 90.0f, 16.0f/9.0f, 1.0f);
 	}
 }
+
+__global__ void update_camera(camera** d_camera,
+	float originX, float originY, float originZ,
+	float lookAtX, float lookAtY, float lookAtZ,
+	float upX, float upY, float upZ) {
+	if (threadIdx.x == 0 && blockIdx.x == 0)
+	{
+		*d_camera = new camera(vec3(originX, originY, originZ), vec3(lookAtX, lookAtY, lookAtZ), vec3(upX, upY, upZ), 90.0f, 16.0f / 9.0f, 1.0f);
+	}
+}
+
 
 __global__ void free_world(hitable** d_list, hitable** d_world, camera** d_camera) {
 	/*delete* (d_list);
