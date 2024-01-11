@@ -3,10 +3,12 @@
 #include "hittable.h"
 #include "hittable_list.h"
 #include "sphere.h"
+#include <curand.h>
+#include <curand_kernel.h>
 
 #define THREADS_X 32
 #define THREADS_Y 32
-#define SPHERES_COUNT 30
+#define SPHERES_COUNT 10
 
 __device__ vec3 get_color(const ray& r, const hitable** world) {
 	ray cur_ray = r;
@@ -53,7 +55,7 @@ __global__ void create_world(hitable** d_list, hitable** d_world, camera** d_cam
 							float lookAtX, float lookAtY, float lookAtZ,
 							float upX, float upY, float upZ);
 __global__ void free_world(hitable** d_list, hitable** d_world, camera** d_camera);
-__host__ void create_world_launcher(hitable** d_list, hitable** d_world, camera** d_camera, vec3 up, vec3 origin, vec3 lookat);
+__host__ void create_world_launcher(hitable** d_list, hitable** d_world, camera** d_camera, Camera cpu_camera);
 
 void launchKernel(uchar3* grid, const int width, const int height, Camera cpu_camera)
 {
@@ -65,11 +67,7 @@ void launchKernel(uchar3* grid, const int width, const int height, Camera cpu_ca
 	checkCudaErrors(cudaMalloc((void**)&d_world, sizeof(hitable*)));
 	checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(camera*)));
 
-	vec3 up = cpu_camera.getUpVector();
-	vec3 origin = cpu_camera.getOrigin();
-	vec3 lookat = cpu_camera.getLookAt();
-
-	create_world_launcher(d_list, d_world, d_camera, up, origin, lookat);
+	create_world_launcher(d_list, d_world, d_camera, cpu_camera);
 
 	dim3 blockDim = dim3(THREADS_X, THREADS_Y);
 	dim3 gridDim = dim3((width + THREADS_X - 1) / THREADS_X, (height + THREADS_Y - 1) / THREADS_Y);
@@ -85,8 +83,12 @@ void launchKernel(uchar3* grid, const int width, const int height, Camera cpu_ca
 }
 
 
-__host__ void create_world_launcher(hitable** d_list, hitable** d_world, camera** d_camera, vec3 up, vec3 origin, vec3 lookat)
+__host__ void create_world_launcher(hitable** d_list, hitable** d_world, camera** d_camera, Camera cpu_camera)
 {
+	vec3 up = cpu_camera.getUpVector();
+	vec3 origin = cpu_camera.getOrigin();
+	vec3 lookat = cpu_camera.getLookAt();
+
 	create_world << <1, 1 >> > (d_list, d_world, d_camera, 
 		origin.x(), origin.y(), origin.z(),
 		lookat.x(), lookat.y(), lookat.z(),
@@ -95,15 +97,22 @@ __host__ void create_world_launcher(hitable** d_list, hitable** d_world, camera*
 	checkCudaErrors(cudaDeviceSynchronize());
 }
 
+__device__ vec3 randomOnGPU(curandState* localState)
+{
+	return vec3(curand_uniform(localState), curand_uniform(localState), curand_uniform(localState));
+}
+
 __global__ void create_world(hitable** d_list, hitable** d_world, camera** d_camera,
 				float originX, float originY, float originZ,
 				float lookAtX, float lookAtY, float lookAtZ,
 				float upX, float upY, float upZ) {
 	if (threadIdx.x == 0 && blockIdx.x == 0) 
 	{
+		curandState localState;
+		curand_init(1984, 0, 0,&localState);
 		for (int i = 0; i < SPHERES_COUNT; i++)
 		{
-			*(d_list+i) = new sphere(vec3(-(i%10), 0, -(i/10) - 0.5), 0.2, vec3(0.8f, 0.3f, 0.3f));
+			*(d_list+i) = new sphere(vec3(-(i%10), i%3, -(i/10) - 0.5), 0.2, randomOnGPU(&localState));
 		}
 		/**(d_list) = new sphere(vec3(0, 0, -1), 0.2, vec3(0.8f, 0.3f, 0.3f));
 		*(d_list + 1) = new sphere(vec3(1, 0, -1), 0.3, vec3(0.4f, 0.9f, 0.3f));

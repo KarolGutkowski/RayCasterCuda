@@ -122,7 +122,7 @@ public:
 
     vec3 getLookAt()
     {
-        auto lookAt = Front - Position;
+        auto lookAt = Front + Position;
         return vec3(lookAt.x, lookAt.y, lookAt.z);
     }
 
