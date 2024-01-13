@@ -4,6 +4,7 @@
 #include "device_launch_parameters.h"
 #include <cmath>
 #include <iostream>
+#include <cassert>
 
 class vec3 {
 public:
@@ -98,4 +99,30 @@ __host__ __device__ inline vec3 cross(const vec3& u, const vec3& v) {
 __host__ __device__ inline vec3 unit_vector(vec3 v) {
     return v / v.length();
 }
+
+__host__ __device__ inline float get_value_at_index(vec3 v, uint32_t idx)
+{
+    switch (idx)
+    {
+    case 0:
+        return v.x();
+    case 1:    
+        return v.y();
+    case 2:    
+        return v.z();
+    default:
+        assert(false);
+    }
+}
+
+__host__ __device__ inline vec3 reflect(vec3 vector, vec3 normal)
+{
+    return vector - 2 * (dot(vector, normal)) * normal;
+}
+
+__host__ __device__ inline vec3 clamp_color(vec3 color)
+{
+    return vec3(fminf(color.x(), 1.0f), fminf(color.y(), 1.0f), fminf(color.z(), 1.0f));
+}
+
 #endif // !VEC3_H

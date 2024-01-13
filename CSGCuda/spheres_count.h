@@ -1,3 +1,3 @@
 #ifndef SPHERES_COUNT
-#define SPHERES_COUNT 10
+#define SPHERES_COUNT 1000
 #endif

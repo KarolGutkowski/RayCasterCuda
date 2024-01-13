@@ -4,13 +4,17 @@
 #include "hittable.h"
 #include "vec3.h"
 
-class sphere : public hitable 
+class sphere /*: public hitable */
 {
 public:
-    __device__ sphere(): hitable(vec3(0.0f, 0.0f, 0.0f)) {}
-    __device__ sphere(vec3 cen, float r, vec3 color) : hitable(color),center(cen), radius(r) {};
-    __device__ virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const
+    __device__ __host__ sphere(): sphere(vec3(0,0,0), 0, vec3(0.0, 0.0, 0.0)) {}
+    __device__ __host__ sphere(vec3 cen, float r, vec3 color) : color(color),center(cen), radius(r) {};
+    __device__ __host__ bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const
     {
+        /*printf("Sphere center(%f,%f,%f), radius(%f), color(%f,%f,%f)\n",
+            center.x(), center.y(), center.z(),
+            radius,
+            color.x(), color.y(), color.z());*/
         vec3 oc = r.origin() - center;
         float a = dot(r.direction(), r.direction());
         float b = dot(oc, r.direction());
@@ -20,32 +24,27 @@ public:
             float temp = (-b - sqrt(discriminant)) / a;
             if (temp < t_max && temp > t_min) {
                 vec3 hit_point = r.at(temp);
-                //if (dot(r.direction(), hit_point - r.origin()) > 0)
-               // {
                     rec.t = temp;
                     rec.p = hit_point;
                     rec.normal = (rec.p - center) / radius;
                     rec.color = color;
                     return true;
-                //}
             }
             temp = (-b + sqrt(discriminant)) / a;
             if (temp < t_max && temp > t_min) {
                 vec3 hit_point = r.at(temp);
-                //if (dot(r.direction(), hit_point - r.origin()) > 0)
-                //{
                     rec.t = temp;
                     rec.p = r.at(rec.t);
                     rec.normal = (rec.p - center) / radius;
                     rec.color = color;
                     return true;
-                //}
             }
         }
         return false;
     }
     vec3 center;
     float radius;
+    vec3 color;
 };
 
 #endif

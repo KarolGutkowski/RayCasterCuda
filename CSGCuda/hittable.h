@@ -14,9 +14,9 @@ struct hit_record
 class hitable {
 public:
     vec3 color;
-    __device__ hitable(): color(vec3(0.0f, 0.0f, 0.0f)) {}
-    __device__ hitable(vec3 _color) : color(_color) {}
-    __device__ virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const = 0;
+    __device__ __host__ hitable(): color(vec3(0.0f, 0.0f, 0.0f)) {}
+    __device__ __host__ hitable(vec3 _color) : color(_color) {}
+    __device__ __host__ virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const = 0;
 };
 
 #endif

@@ -10,11 +10,20 @@
 #include "cpu_camera.h"
 #include "camera.h"
 #include "hittable.h"
+#include "sphere.h"
 #include "hittable_list.h"
+#include "bvh_structures/BVHNode.h"
 
-void launchKernel(uchar3* grid, const int width, const int height, hitable** d_list, hitable** d_world, camera** d_camera);
-void create_world_on_gpu(hitable** d_list, hitable** d_world, camera** d_camera, Camera cpu_camera);
-void destroy_world_resources_on_gpu(hitable** d_list, hitable** d_world, camera** d_camera);
+void launchKernel(uchar3* grid, 
+	const int width, 
+	const int height, 
+	sphere** d_list, 
+	hitable_list** d_world,
+	camera** d_camera,
+	BVHNode* bvh_d,
+	uint32_t nodes_used);
+void create_world_on_gpu(sphere** d_list, hitable_list** d_world, camera** d_camera, Camera cpu_camera);
+void destroy_world_resources_on_gpu(sphere** d_list, hitable_list** d_world, camera** d_camera);
 void update_camera_launcher(camera** d_camera, Camera cpu_camera);
 #endif // ! KERNEL_H
 
