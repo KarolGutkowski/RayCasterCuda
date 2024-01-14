@@ -7,27 +7,23 @@
 #include <curand_kernel.h>
 #include "spheres_count.h"
 
-#define THREADS_X 32
-#define THREADS_Y 32
-#define BVH_STACK_SIZE 16
+#define THREADS_X 16
+#define THREADS_Y 16
+#define BVH_STACK_SIZE 64
 
-__device__ vec3 calculateColor(hit_record rec, ray r)
+__device__ vec3 calculateColor(hit_record rec, ray r, float3* light_postions, float3* light_colors)
 {
 	vec3 ambient = rec.color * 0.2f;
 
 	vec3 total;
-	for (int i = 0; i < 10; i++) //get lights values
+	for (int i = 0; i < LIGHTS_COUNT; i++) //get lights values
 	{
-		vec3 lightDir = unit_vector(vec3(i / 2 - 5, i / 2, 0.0f) - rec.p);
+		vec3 lightDir = unit_vector(light_postions[i] - rec.p);
 
 		float diff = fmaxf(dot(rec.normal, lightDir), 0.0f);
-		vec3 diffuse = diff * rec.color * 0.1f;
+		vec3 diffuse = diff * rec.color * 0.3f * light_colors[i];
 
 		vec3 viewDir = unit_vector(r.origin() - rec.p);
-		/*if (threadIdx.x == 0 && blockIdx.x == 0)
-		{
-			printf("ray origin = (%f,%f,%f)\n", r.origin().x(), r.origin().y(), r.origin().z());
-		}*/
 		vec3 reflectDir = reflect(-lightDir, unit_vector(rec.normal));
 
 		float spec = pow(fmaxf(dot(viewDir, reflectDir), 0.0), 40.0f);
@@ -38,14 +34,34 @@ __device__ vec3 calculateColor(hit_record rec, ray r)
 }
 
 
-__device__ vec3 get_color(const ray& r, const hitable_list** world, BVHNode* nodes, const uint32_t nodes_used) {
+__device__ vec3 get_color(
+	const ray& r, 
+	const hitable_list** world, 
+	BVHNode* nodes,
+	uint32_t* nodes_indices,
+	const uint32_t nodes_used, 
+	float3* light_postions,
+	float3* light_colors) 
+{
+	/*for (int i = 0; i < nodes_used; i++)
+	{
+		if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0)
+		{
+			printf("[%d] is box with n=%d spheres starting at %d\n", i, nodes[i].spheresCount, nodes[i].leftFirst);
+		}
+	}*/
+
 	ray cur_ray = r;
 	hit_record rec;
 
 	BVHNode stack[BVH_STACK_SIZE];
 	int stackIdx = 0;
 	stack[stackIdx++] = nodes[0];
-	while (stackIdx)
+
+	vec3 color;
+	float closest_hit = FLT_MAX;
+
+	while (stackIdx>0)
 	{
 		BVHNode* current = &stack[stackIdx-1];
 		stackIdx--;
@@ -54,27 +70,26 @@ __device__ vec3 get_color(const ray& r, const hitable_list** world, BVHNode* nod
 		{
 			if (current->intersectAABB(cur_ray))
 			{
-				if(current->leftFirst < nodes_used && current->leftFirst + 1 < nodes_used)
-					stack[stackIdx++] = nodes[current->leftFirst];
-					stack[stackIdx++] = nodes[current->leftFirst+1];
+				if (current->leftFirst < nodes_used && current->leftFirst + 1 < nodes_used)
+				{			
+					uint32_t leftChildIdx = current->leftFirst;
+					stack[stackIdx++] = nodes[leftChildIdx];
+					stack[stackIdx++] = nodes[leftChildIdx + 1];
+				}
 			}
 		}
 		else
 		{
 			uint32_t first = current->leftFirst;
-			uint32_t last = current->leftFirst + current->spheresCount -1;
-			if ((*world)->hit_range(cur_ray, 0.001f, FLT_MAX, rec, first, last)) {
-				return calculateColor(rec, cur_ray);
+			uint32_t last = first + current->spheresCount - 1;
+			if ((*world)->hit_range(cur_ray, 0.001f, closest_hit, rec, first, last, nodes_indices)) {
+				closest_hit = rec.t;
+				color = calculateColor(rec, cur_ray, light_postions, light_colors);
 			}
 		}
-
 	}
 
-	vec3 unit_direction = unit_vector(cur_ray.direction());
-	float t = 0.5f * (unit_direction.y() + 1.0f);
-	vec3 c = (1.0f - t) * vec3(0.1, 0.1, 0.1) + t * vec3(0.2, 0.3, 0.5);
-	return c;
-	return vec3(0.0, 0.0, 0.0);
+	return color;
 }
 
 __global__ void color_grid_kernel(
@@ -84,7 +99,10 @@ __global__ void color_grid_kernel(
 	hitable_list** world, 
 	camera** camera, 
 	BVHNode* bvh,
-	uint32_t nodes_used)
+	uint32_t* indicies,
+	uint32_t nodes_used,
+	float3* light_postions,
+	float3* light_colors)
 {
 	int row = blockIdx.y * blockDim.y + threadIdx.y;
 	int column = blockIdx.x * blockDim.x + threadIdx.x;
@@ -93,11 +111,20 @@ __global__ void color_grid_kernel(
 		return;
 
 	int idx = row * width + column;
+
+	/*if (threadIdx.x == 0 && blockIdx.x == 0)
+	{
+		for (int i = 0; i < nodes_used; i++)
+		{
+			if (bvh[i].spheresCount != 0)
+				printf("[%d] has %d spheres in it directly\n", i, bvh[i].spheresCount);
+			else 
+				printf("[%d] is an internal node and has children %d and %d \n", i, bvh[i].leftFirst, bvh[i].leftFirst+1);
+		}
+	}*/
 	
-	float u = column / (float)width;
-	float v = row / (float)height;
-	ray r = (*camera)->get_ray(u, v);
-	vec3 col = get_color(r, world, bvh, nodes_used);
+	ray r = (*camera)->get_ray(column / (float)width, row / (float)height);
+	vec3 col = get_color(r, world, bvh, indicies ,nodes_used,light_postions, light_colors);
 
 	grid[idx].x = col.r() * 255;
 	grid[idx].y = col.g() * 255;
@@ -108,7 +135,7 @@ __global__ void create_world(sphere** d_list, hitable_list** d_world, camera** d
 	float originX, float originY, float originZ,
 	float lookAtX, float lookAtY, float lookAtZ,
 	float upX, float upY, float upZ);
-__global__ void free_world(sphere** d_list, hitable_list** d_world, camera** d_camera);
+__global__ void free_world(sphere** d_list, hitable_list** d_world);
 __host__ void create_world_launcher(sphere** d_list, hitable_list** d_world, camera** d_camera, Camera cpu_camera);
 __global__ void update_camera(camera** d_camera,
 	float originX, float originY, float originZ,
@@ -127,14 +154,17 @@ void launchKernel(uchar3* grid,
 	hitable_list** d_world,
 	camera** d_camera,
 	BVHNode* bvh_d,
-	uint32_t nodes_used)
+	uint32_t* indicices,
+	uint32_t nodes_used,
+	float3* light_postions,
+	float3* light_colors)
 {
 	dim3 blockDim = dim3(THREADS_X, THREADS_Y);
 	dim3 gridDim = dim3((width + THREADS_X - 1) / THREADS_X, (height + THREADS_Y - 1) / THREADS_Y);
 
-	color_grid_kernel<<<gridDim, blockDim>>>(grid, width, height, d_world, d_camera, bvh_d, nodes_used);
+	color_grid_kernel<<<gridDim, blockDim>>>(grid, width, height, d_world, d_camera, bvh_d, indicices, nodes_used, light_postions, light_colors);
 
-	//destroy_camera << <1, 1 >> > (d_camera);
+	destroy_camera << <1, 1 >> > (d_camera);
 
 	checkCudaErrors(cudaDeviceSynchronize());
 }
@@ -144,12 +174,11 @@ void create_world_on_gpu(sphere** d_list, hitable_list** d_world, camera** d_cam
 	create_world_launcher(d_list, d_world, d_camera, cpu_camera);
 }
 
-void destroy_world_resources_on_gpu(sphere** d_list, hitable_list** d_world, camera** d_camera)
+void destroy_world_resources_on_gpu(sphere** d_list, hitable_list** d_world)
 {
-	free_world << <1, 1 >> > (d_list, d_world, d_camera);
+	free_world << <1, 1 >> > (d_list, d_world);
 	checkCudaErrors(cudaFree(d_list));
 	checkCudaErrors(cudaFree(d_world));
-	checkCudaErrors(cudaFree(d_camera));
 }
 
 
@@ -207,7 +236,7 @@ __global__ void update_camera(camera** d_camera,
 }
 
 
-__global__ void free_world(sphere** d_list, hitable_list** d_world, camera** d_camera) {
+__global__ void free_world(sphere** d_list, hitable_list** d_world) {
 	if (threadIdx.x == 0 && blockIdx.x == 0)
 	{
 		for (int i = 0; i < SPHERES_COUNT; i++)
@@ -215,6 +244,5 @@ __global__ void free_world(sphere** d_list, hitable_list** d_world, camera** d_c
 			delete* (d_list + i);
 		}
 		delete* d_world;
-		//delete* d_camera; im already deleting it earlier
 	}
 }

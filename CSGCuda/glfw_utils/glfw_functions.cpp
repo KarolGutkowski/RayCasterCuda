@@ -14,13 +14,13 @@ void setGLFWWindowHints()
 {
 	//commented this out cause it disables me from making round points
 	
-	/*glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	/*glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);*/
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);*/
 	
 }
 
-GLFWwindow* createGLFWWindow(int width, int height,const char* windowTitle)
+GLFWwindow* createGLFWWindow(int width, int height, const char* windowTitle)
 {
 	GLFWwindow* window;
 	window = glfwCreateWindow(width, height, windowTitle, NULL, NULL);
@@ -32,6 +32,7 @@ GLFWwindow* createGLFWWindow(int width, int height,const char* windowTitle)
 	}
 
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glViewport(0, 0, width, width);
 
 	return window;
 }

@@ -11,10 +11,6 @@ public:
     __device__ __host__ sphere(vec3 cen, float r, vec3 color) : color(color),center(cen), radius(r) {};
     __device__ __host__ bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const
     {
-        /*printf("Sphere center(%f,%f,%f), radius(%f), color(%f,%f,%f)\n",
-            center.x(), center.y(), center.z(),
-            radius,
-            color.x(), color.y(), color.z());*/
         vec3 oc = r.origin() - center;
         float a = dot(r.direction(), r.direction());
         float b = dot(oc, r.direction());

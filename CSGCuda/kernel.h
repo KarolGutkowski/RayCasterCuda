@@ -13,6 +13,7 @@
 #include "sphere.h"
 #include "hittable_list.h"
 #include "bvh_structures/BVHNode.h"
+#include "lights_count.h"
 
 void launchKernel(uchar3* grid, 
 	const int width, 
@@ -21,9 +22,12 @@ void launchKernel(uchar3* grid,
 	hitable_list** d_world,
 	camera** d_camera,
 	BVHNode* bvh_d,
-	uint32_t nodes_used);
+	uint32_t* indicies,
+	uint32_t nodes_used,
+	float3* light_postions,
+	float3* light_colors);
 void create_world_on_gpu(sphere** d_list, hitable_list** d_world, camera** d_camera, Camera cpu_camera);
-void destroy_world_resources_on_gpu(sphere** d_list, hitable_list** d_world, camera** d_camera);
+void destroy_world_resources_on_gpu(sphere** d_list, hitable_list** d_world);
 void update_camera_launcher(camera** d_camera, Camera cpu_camera);
 #endif // ! KERNEL_H
 

@@ -22,16 +22,16 @@ public:
         return hit_anything;
     }
 
-    __device__ __host__ bool hit_range(const ray& r, float t_min, float t_max, hit_record& rec, uint32_t firstIdx, uint32_t lastIdx) const
+    __device__ __host__ bool hit_range(const ray& r, float t_min, float t_max, hit_record& rec, uint32_t firstIdx, uint32_t lastIdx, uint32_t* indicies) const
     {
         hit_record temp_rec;
         bool hit_anything = false;
         float closest_so_far = t_max;
         for (int i = firstIdx; i <= list_size && i <= lastIdx; i++) {
-            if ((*(list + i))->hit(r, t_min, closest_so_far, temp_rec)) {
+            if ((*(list + indicies[i]))->hit(r, t_min, closest_so_far, temp_rec)) {
                 hit_anything = true;
                 closest_so_far = temp_rec.t;
-                temp_rec.color = list[i]->color;
+                temp_rec.color = list[indicies[i]]->color;
                 rec = temp_rec;
             }
         }

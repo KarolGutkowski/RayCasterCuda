@@ -11,9 +11,10 @@
 #include "spheres_count.h"
 #include "bvh_structures/BVHNode.h"
 #include <cstdint>
-
-#define WINDOW_WIDTH 1280 
-#define WINDOW_HEIGHT 720
+#include "lights_count.h"
+#include "opengl_util/opengl_util.h"
+#include "screen_dimensions.h"
+#include "imgui_utils/imgui_utilities.h"
 
 void displayMsPerFrame(double& lastTime);
 void drawTexture(int width, int height);
@@ -23,7 +24,16 @@ void Subdivide(uint32_t index, BVHNode* nodes, sphere* spheres, uint32_t* sphere
 float3 subtract(float3 a, float3 b);
 float get_value_at_index(float3 num, uint32_t idx);
 float get_random_in_normalized();
-
+sphere* generateSpheresOnCPU();
+sphere** transferSpheresToGPU(sphere* spheres);
+hitable_list** allocateHitableList();
+camera** allocateCamera();
+BVHNode* copyBVHToGPU(BVHNode* bvhNodes, uint32_t nodes_used);
+void* getMappedPointer(GLuint pbo, cudaGraphicsResource* cuda_pbo);
+float3* transferLightPositionsToGPU(float3* light_postions);
+float3* transferLightColorsToGPU(float3* light_colors);
+void generate_random_lights(float3* light_postions, float3* light_colors);
+void processUserInputs(GLFWwindow* window, Camera& cpu_camera);
 
 int main(int argc, char** argv)
 {
@@ -34,71 +44,23 @@ int main(int argc, char** argv)
     loadGlad();
     setupCallbacks(window);
 
-    // group this into a method;
-    /*glEnable(GL_PROGRAM_POINT_SIZE);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);*/
-    glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+    GLuint pbo = generatePBO();
+    uchar3* cpu_grid = allocateCPUGrid();
 
-    GLuint pbo = 0;;
-    glGenBuffers(1, &pbo);
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
+    addDataToPBO(cpu_grid, pbo);
 
-    uchar3* cpu_grid = (uchar3*)malloc(sizeof(uchar3) * WINDOW_WIDTH * WINDOW_HEIGHT);
+    GLuint tex = generateTexture();
 
-    if (!cpu_grid)
-    {
-        std::cout << "failed to allocate cpu grid" << std::endl;
-        return -1;
-    }
-
-    for (int i = 0; i < WINDOW_WIDTH * WINDOW_HEIGHT; i++)
-    {
-        cpu_grid[i].x = 0;
-        cpu_grid[i].y = 0;
-        cpu_grid[i].z = 0;
-    }
-
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, 3 * WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(GLubyte), cpu_grid, GL_STREAM_DRAW);
-
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    uchar3* grid = 0;
-    int W = WINDOW_WIDTH;
-    int H = WINDOW_HEIGHT;
-    cudaGraphicsResource * cuda_pbo;
-
-    sphere* spheres = new sphere[SPHERES_COUNT];
-    srand(time(NULL));
-    for (int i = 0; i < SPHERES_COUNT; i++)
-    {
-        spheres[i] = sphere(vec3((i % 10), get_random_in_normalized()* 30 - 15, -(i / 10) - 0.5), get_random_in_normalized()/2, vec3(get_random_in_normalized(), get_random_in_normalized(), get_random_in_normalized()));
-    }
-   
+    sphere* spheres = generateSpheresOnCPU();
     double lastTime = glfwGetTime();
     int nbFrames = 0;
 
     Camera cpu_camera = Camera();
 
-    sphere** d_list;
-    hitable_list** d_world;
-    camera** d_camera;
+    sphere** d_list = transferSpheresToGPU(spheres);
+    hitable_list** d_world = allocateHitableList();
+    camera** d_camera = allocateCamera();
 
-    checkCudaErrors(cudaMalloc((void**)&d_list, SPHERES_COUNT * sizeof(sphere*)));
-
-    for (int i = 0; i < SPHERES_COUNT; i++)
-    {
-        sphere* sphere_device;
-        checkCudaErrors(cudaMalloc((void**)&sphere_device, sizeof(sphere)));
-        checkCudaErrors(cudaMemcpy(sphere_device, &spheres[i], sizeof(sphere), cudaMemcpyHostToDevice));
-        checkCudaErrors(cudaMemcpy((void**)&(d_list[i]), &sphere_device, sizeof(sphere*), cudaMemcpyHostToDevice));
-    }
-
-    checkCudaErrors(cudaMalloc((void**)&d_world, sizeof(hitable_list*)));
-    checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(camera*)));
     create_world_on_gpu(d_list, d_world, d_camera, cpu_camera);
 
     BVHNode bvhNodes[2 * SPHERES_COUNT - 1];
@@ -106,35 +68,50 @@ int main(int argc, char** argv)
     uint32_t nodes_used = 0;
     build_bvh(bvhNodes, spheres, indices, &nodes_used);
 
-    BVHNode* bvh_d;
-    checkCudaErrors(cudaMalloc((void**)&bvh_d, sizeof(BVHNode) * nodes_used));
-    checkCudaErrors(cudaMemcpy(bvh_d, bvhNodes, sizeof(BVHNode) * nodes_used, cudaMemcpyHostToDevice));
+    uint32_t* indices_d;
+    cudaMalloc((void**)&indices_d, SPHERES_COUNT * sizeof(uint32_t));
+    cudaMemcpy(indices_d, indices, SPHERES_COUNT * sizeof(uint32_t), cudaMemcpyHostToDevice);
 
+    BVHNode* bvh_d = copyBVHToGPU(bvhNodes, nodes_used);
+
+    float3* light_postions = new float3[LIGHTS_COUNT];
+    float3* light_colors = new float3[LIGHTS_COUNT];
+
+    generate_random_lights(light_postions, light_colors);
+
+    float3* light_postions_d = transferLightPositionsToGPU(light_postions);
+    float3* light_colors_d = transferLightColorsToGPU(light_colors);
+
+    cudaGraphicsResource* cuda_pbo;
     cudaGraphicsGLRegisterBuffer(&cuda_pbo, pbo, cudaGraphicsRegisterFlagsWriteDiscard);
-    cudaGraphicsMapResources(1, &cuda_pbo);
-    cudaGraphicsResourceGetMappedPointer((void**)&grid, NULL, cuda_pbo);
 
     while (!glfwWindowShouldClose(window))
     {
-        //put those three calls into one function
-        processInput(window, cpu_camera);
-        mouse_callback(window, cpu_camera);
-        glfwPollEvents();
+        processUserInputs(window, cpu_camera);
+
+        uchar3* grid = (uchar3*)getMappedPointer(pbo, cuda_pbo);
 
         update_camera_launcher(d_camera, cpu_camera);
-        launchKernel(grid, W, H, d_list, d_world, d_camera, bvh_d, nodes_used);
+        launchKernel(grid, WINDOW_WIDTH, WINDOW_HEIGHT, d_list, d_world, d_camera, bvh_d, indices_d,nodes_used, light_postions_d, light_colors_d);
 
-        drawTexture(W, H);
+        cudaGraphicsUnmapResources(1, &cuda_pbo);
+
+        drawTexture(WINDOW_WIDTH, WINDOW_HEIGHT);
+
         glfwSwapBuffers(window);
         displayMsPerFrame(lastTime);
     }
 
-    cudaGraphicsUnmapResources(1, &cuda_pbo);
-
-    destroy_world_resources_on_gpu(d_list, d_world, d_camera);
+    destroy_world_resources_on_gpu(d_list, d_world);
     glDeleteBuffers(1, &pbo);
     glDeleteTextures(1, &tex);
     cudaFree(bvh_d);
+    delete[] spheres;
+    //delete[] bvhNodes;
+    delete[] indices;
+    delete[] light_postions;
+    delete[] light_colors;
+    free(cpu_grid);
 
     glfwTerminate();
     return 0;
@@ -177,7 +154,8 @@ void UpdateBounds(const uint32_t nodeIdx, BVHNode* nodes, sphere* spheres, uint3
 
     for (uint32_t first = node.leftFirst, i = 0; i < node.spheresCount; i++)
     {
-        sphere sphere = spheres[first + i];
+        uint32_t leafTriIdx = spheres_indices[first + i];
+        sphere& sphere = spheres[leafTriIdx];
         float3 min{
             sphere.center.x() - sphere.radius,
             sphere.center.y() - sphere.radius,
@@ -220,6 +198,8 @@ void build_bvh(BVHNode* bvh_nodes, sphere* spheres, uint32_t* spheres_indices, u
 void Subdivide(uint32_t index, BVHNode* nodes, sphere* spheres, uint32_t* spheres_indices, uint32_t* nodesUsed)
 {
     BVHNode& node = nodes[index];
+    if (node.spheresCount <= 5) return;
+
     float3 extent = subtract(node.aabbMax, node.aabbMin);
 
     int axis = 0;
@@ -240,8 +220,6 @@ void Subdivide(uint32_t index, BVHNode* nodes, sphere* spheres, uint32_t* sphere
 
     int leftCount = i - node.leftFirst;
     if (leftCount == 0 || leftCount == node.spheresCount) return;
-
-
 
     int leftChildIdx = (*nodesUsed)++;
     int rightChildIdx = (*nodesUsed)++;
@@ -287,4 +265,94 @@ float get_value_at_index(float3 num, uint32_t idx)
 float get_random_in_normalized()
 {
     return rand() / (float)RAND_MAX;
+}
+
+sphere* generateSpheresOnCPU()
+{
+    sphere* spheres = new sphere[SPHERES_COUNT];
+    srand(time(NULL));
+    for (int i = 0; i < SPHERES_COUNT; i++)
+    {
+        spheres[i] = sphere(vec3((i % 10), get_random_in_normalized() * 30 -15, -(i / 100) - 0.5f), get_random_in_normalized() / 2 +0.2f, vec3(get_random_in_normalized(), get_random_in_normalized(), get_random_in_normalized()));
+    }
+    return spheres;
+}
+
+sphere** transferSpheresToGPU(sphere* spheres)
+{
+    sphere** d_list;
+    checkCudaErrors(cudaMalloc((void**)&d_list, SPHERES_COUNT * sizeof(sphere*)));
+    for (int i = 0; i < SPHERES_COUNT; i++)
+    {
+        sphere* sphere_device;
+        checkCudaErrors(cudaMalloc((void**)&sphere_device, sizeof(sphere)));
+        checkCudaErrors(cudaMemcpy(sphere_device, &spheres[i], sizeof(sphere), cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaMemcpy((void**)&(d_list[i]), &sphere_device, sizeof(sphere*), cudaMemcpyHostToDevice));
+    }
+    return d_list;
+}
+
+hitable_list** allocateHitableList()
+{
+    hitable_list** d_world;
+    checkCudaErrors(cudaMalloc((void**)&d_world, sizeof(hitable_list*)));
+    return d_world;
+}
+
+camera** allocateCamera()
+{
+    camera** d_camera;
+    checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(camera*)));
+    return d_camera;
+}
+
+BVHNode* copyBVHToGPU(BVHNode* bvhNodes, uint32_t nodes_used)
+{
+    BVHNode* bvh_d;
+    checkCudaErrors(cudaMalloc((void**)&bvh_d, sizeof(BVHNode) * nodes_used));
+    checkCudaErrors(cudaMemcpy(bvh_d, bvhNodes, sizeof(BVHNode) * nodes_used, cudaMemcpyHostToDevice));
+    return bvh_d;
+}
+
+void* getMappedPointer(GLuint pbo, cudaGraphicsResource *cuda_pbo)
+{
+    void* grid = 0;
+    cudaGraphicsMapResources(1, &cuda_pbo);
+    cudaGraphicsResourceGetMappedPointer((void**)&grid, NULL, cuda_pbo);
+    return grid;
+}
+
+float3* transferLightPositionsToGPU(float3* light_postions)
+{
+    float3* light_postions_d;
+    checkCudaErrors(cudaMalloc((void**)&light_postions_d, sizeof(float3) * LIGHTS_COUNT));
+    checkCudaErrors(cudaMemcpy(light_postions_d, light_postions, sizeof(float3) * LIGHTS_COUNT, cudaMemcpyHostToDevice));
+    return light_postions_d;
+}
+
+float3* transferLightColorsToGPU(float3* light_colors)
+{
+    float3* light_colors_d;
+    checkCudaErrors(cudaMalloc((void**)&light_colors_d, sizeof(float3)* LIGHTS_COUNT));
+    checkCudaErrors(cudaMemcpy(light_colors_d, light_colors, sizeof(float3)* LIGHTS_COUNT, cudaMemcpyHostToDevice));
+    return light_colors_d;
+}
+
+void generate_random_lights(float3* light_postions, float3* light_colors)
+{
+    for (int i = 0; i < LIGHTS_COUNT; i++)
+    {
+        light_postions[i] = { (i / 2.0f) - 5.0f, (i / 2.0f), (float)-i };
+        light_colors[i] = { get_random_in_normalized(), get_random_in_normalized(), get_random_in_normalized() };
+    }
+
+    light_postions[9] = { 16.321367, 4.202590, -3.698214 };
+    light_colors[9] = { 1.0f, 0.0f, 0.0f };
+}
+
+void processUserInputs(GLFWwindow* window, Camera& cpu_camera)
+{
+    processInput(window, cpu_camera);
+    mouse_callback(window, cpu_camera);
+    glfwPollEvents();
 }
