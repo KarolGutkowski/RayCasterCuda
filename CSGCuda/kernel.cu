@@ -43,14 +43,6 @@ __device__ vec3 get_color(
 	float3* light_postions,
 	float3* light_colors) 
 {
-	/*for (int i = 0; i < nodes_used; i++)
-	{
-		if (threadIdx.x == 0 && threadIdx.y == 0 && blockIdx.x == 0)
-		{
-			printf("[%d] is box with n=%d spheres starting at %d\n", i, nodes[i].spheresCount, nodes[i].leftFirst);
-		}
-	}*/
-
 	ray cur_ray = r;
 	hit_record rec;
 

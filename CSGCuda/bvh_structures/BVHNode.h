@@ -9,7 +9,7 @@ __declspec(align(32))struct BVHNode
 {
     float3 aabbMin, aabbMax;
     uint32_t leftFirst, spheresCount;
-    __device__ bool intersectAABB(const ray& r)
+    __device__ __host__ bool intersectAABB(const ray& r)
     {
         // r.dir is unit direction vector of ray
         float3 dirfrac;

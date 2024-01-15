@@ -15,6 +15,7 @@
 #include "opengl_util/opengl_util.h"
 #include "screen_dimensions.h"
 #include "imgui_utils/imgui_utilities.h"
+#include "cpu_renderer.h"
 
 void displayMsPerFrame(double& lastTime);
 void drawTexture(int width, int height);
@@ -34,9 +35,16 @@ float3* transferLightPositionsToGPU(float3* light_postions);
 float3* transferLightColorsToGPU(float3* light_colors);
 void generate_random_lights(float3* light_postions, float3* light_colors);
 void processUserInputs(GLFWwindow* window, Camera& cpu_camera);
+uint32_t* transferIndicesToGPU(uint32_t* indices);
+void process_command_line_arguments(int argc, char** argv, bool& run_cpu);
 
 int main(int argc, char** argv)
 {
+    bool run_cpu = false;
+    bool rotate_lights = false;
+
+    process_command_line_arguments(argc, argv, run_cpu);
+    
     initiaLizeGFLW();
     setGLFWWindowHints();
     auto window = createGLFWWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "CUDA RayCasting");
@@ -68,9 +76,7 @@ int main(int argc, char** argv)
     uint32_t nodes_used = 0;
     build_bvh(bvhNodes, spheres, indices, &nodes_used);
 
-    uint32_t* indices_d;
-    cudaMalloc((void**)&indices_d, SPHERES_COUNT * sizeof(uint32_t));
-    cudaMemcpy(indices_d, indices, SPHERES_COUNT * sizeof(uint32_t), cudaMemcpyHostToDevice);
+    uint32_t* indices_d = transferIndicesToGPU(indices);
 
     BVHNode* bvh_d = copyBVHToGPU(bvhNodes, nodes_used);
 
@@ -85,16 +91,32 @@ int main(int argc, char** argv)
     cudaGraphicsResource* cuda_pbo;
     cudaGraphicsGLRegisterBuffer(&cuda_pbo, pbo, cudaGraphicsRegisterFlagsWriteDiscard);
 
+    hitable_list_cpu* world = new hitable_list_cpu(spheres, SPHERES_COUNT);
+
     while (!glfwWindowShouldClose(window))
     {
         processUserInputs(window, cpu_camera);
 
-        uchar3* grid = (uchar3*)getMappedPointer(pbo, cuda_pbo);
+        if (!run_cpu) {
+            uchar3* grid = (uchar3*)getMappedPointer(pbo, cuda_pbo);
 
-        update_camera_launcher(d_camera, cpu_camera);
-        launchKernel(grid, WINDOW_WIDTH, WINDOW_HEIGHT, d_list, d_world, d_camera, bvh_d, indices_d,nodes_used, light_postions_d, light_colors_d);
+            update_camera_launcher(d_camera, cpu_camera);
+            launchKernel(grid, WINDOW_WIDTH, WINDOW_HEIGHT, d_list, d_world, d_camera, bvh_d, indices_d, nodes_used, light_postions_d, light_colors_d);
 
-        cudaGraphicsUnmapResources(1, &cuda_pbo);
+            cudaGraphicsUnmapResources(1, &cuda_pbo);
+        }
+        else
+        {
+            vec3 up = cpu_camera.getUpVector();
+            vec3 origin = cpu_camera.getOrigin();
+            vec3 lookat = cpu_camera.getLookAt();
+
+            camera* cam = new camera(origin, lookat, up, 90.0f, 16.0f / 9.0f, 1.0f);
+
+            render(cpu_grid, WINDOW_WIDTH, WINDOW_HEIGHT, spheres, world, cam, bvhNodes, indices, nodes_used, light_postions, light_colors);
+            glBufferData(GL_PIXEL_UNPACK_BUFFER, 3 * WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(GLubyte), cpu_grid, GL_STREAM_DRAW);
+            delete cam;
+        }
 
         drawTexture(WINDOW_WIDTH, WINDOW_HEIGHT);
 
@@ -105,7 +127,13 @@ int main(int argc, char** argv)
     destroy_world_resources_on_gpu(d_list, d_world);
     glDeleteBuffers(1, &pbo);
     glDeleteTextures(1, &tex);
+
+    cudaFree(light_postions_d);
+    cudaFree(light_colors_d);
+    cudaFree(indices_d);
     cudaFree(bvh_d);
+
+    delete world;
     delete[] spheres;
     //delete[] bvhNodes;
     delete[] indices;
@@ -355,4 +383,26 @@ void processUserInputs(GLFWwindow* window, Camera& cpu_camera)
     processInput(window, cpu_camera);
     mouse_callback(window, cpu_camera);
     glfwPollEvents();
+}
+
+uint32_t* transferIndicesToGPU(uint32_t* indices)
+{
+    uint32_t* indices_d;
+    cudaMalloc((void**)&indices_d, SPHERES_COUNT * sizeof(uint32_t));
+    cudaMemcpy(indices_d, indices, SPHERES_COUNT * sizeof(uint32_t), cudaMemcpyHostToDevice);
+    return indices_d;
+}
+
+void process_command_line_arguments(int argc, char** argv, bool& run_cpu)
+{
+    if (argc == 1)
+        return;
+
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp("-cpu", argv[i]) == 0)
+        {
+            run_cpu = true;
+        }
+    }
 }
