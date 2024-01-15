@@ -6,7 +6,7 @@
 
 void resizeWindowCallback(GLFWwindow* window, int width, int height);
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
-void processInput(GLFWwindow* window, Camera& camera);
+void processInput(GLFWwindow* window, Camera& camera, bool& rotate_lights);
 void mouse_callback(GLFWwindow* window, Camera& camera);
 
 #endif // !INTERACTIONS_H

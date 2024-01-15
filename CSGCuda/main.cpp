@@ -34,9 +34,10 @@ void* getMappedPointer(GLuint pbo, cudaGraphicsResource* cuda_pbo);
 float3* transferLightPositionsToGPU(float3* light_postions);
 float3* transferLightColorsToGPU(float3* light_colors);
 void generate_random_lights(float3* light_postions, float3* light_colors);
-void processUserInputs(GLFWwindow* window, Camera& cpu_camera);
+void processUserInputs(GLFWwindow* window, Camera& cpu_camera, bool& rotate_lights);
 uint32_t* transferIndicesToGPU(uint32_t* indices);
 void process_command_line_arguments(int argc, char** argv, bool& run_cpu);
+void rotate_lights_around_Y(float3* light_postions);
 
 int main(int argc, char** argv)
 {
@@ -95,10 +96,23 @@ int main(int argc, char** argv)
 
     while (!glfwWindowShouldClose(window))
     {
-        processUserInputs(window, cpu_camera);
+        processUserInputs(window, cpu_camera, rotate_lights);
+
+        if (rotate_lights)
+        {
+            rotate_lights_around_Y(light_postions);
+        }
 
         if (!run_cpu) {
             uchar3* grid = (uchar3*)getMappedPointer(pbo, cuda_pbo);
+
+            if (rotate_lights)
+            {
+                cudaFree(light_postions_d);
+                cudaFree(light_colors_d);
+                light_postions_d = transferLightPositionsToGPU(light_postions);
+                light_colors_d = transferLightColorsToGPU(light_colors);
+            }
 
             update_camera_launcher(d_camera, cpu_camera);
             launchKernel(grid, WINDOW_WIDTH, WINDOW_HEIGHT, d_list, d_world, d_camera, bvh_d, indices_d, nodes_used, light_postions_d, light_colors_d);
@@ -370,17 +384,17 @@ void generate_random_lights(float3* light_postions, float3* light_colors)
 {
     for (int i = 0; i < LIGHTS_COUNT; i++)
     {
-        light_postions[i] = { (i / 2.0f) - 5.0f, (i / 2.0f), (float)-i };
+        light_postions[i] = { (i / 2.0f) - 5.0f, (i / 2.0f), (float)-i*5 };
         light_colors[i] = { get_random_in_normalized(), get_random_in_normalized(), get_random_in_normalized() };
     }
 
-    light_postions[9] = { 16.321367, 4.202590, -3.698214 };
-    light_colors[9] = { 1.0f, 0.0f, 0.0f };
+    /*light_postions[9] = { 16.321367, 4.202590, -3.698214 };
+    light_colors[9] = { 1.0f, 0.0f, 0.0f };*/
 }
 
-void processUserInputs(GLFWwindow* window, Camera& cpu_camera)
+void processUserInputs(GLFWwindow* window, Camera& cpu_camera, bool& rotate_lights)
 {
-    processInput(window, cpu_camera);
+    processInput(window, cpu_camera, rotate_lights);
     mouse_callback(window, cpu_camera);
     glfwPollEvents();
 }
@@ -404,5 +418,17 @@ void process_command_line_arguments(int argc, char** argv, bool& run_cpu)
         {
             run_cpu = true;
         }
+    }
+}
+
+void rotate_lights_around_Y(float3* light_postions)
+{
+    float angle = (0.2f * (float)glfwGetTime()) / 180.0f;
+    for (int i = 0; i < LIGHTS_COUNT; i++)
+    {
+        float3 light_position = light_postions[i];
+        float x = light_position.x * cos(angle) + light_position.z * sin(angle);
+        float z = light_position.x * (-sin(angle)) + light_position.z * cos(angle);
+        light_postions[i] = { x, light_position.y, z };
     }
 }

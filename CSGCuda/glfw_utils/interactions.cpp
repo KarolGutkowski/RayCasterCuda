@@ -13,7 +13,10 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 }
 
 float lastFrame = 0.0f;
-void processInput(GLFWwindow* window, Camera& camera) {
+void processInput(GLFWwindow* window, Camera& camera, bool& rotate_lights) 
+{
+    rotate_lights = (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS);
+
     float currentFrame = glfwGetTime();
     float deltaTime = currentFrame - lastFrame;
     lastFrame = currentFrame;
