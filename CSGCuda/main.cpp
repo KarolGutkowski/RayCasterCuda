@@ -39,6 +39,7 @@ void processUserInputs(GLFWwindow* window, Camera& cpu_camera, bool& rotate_ligh
 uint32_t* transferIndicesToGPU(uint32_t* indices);
 void process_command_line_arguments(int argc, char** argv, bool& run_cpu);
 void rotate_lights_around_Y(float3* light_postions);
+camera* get_simplified_camera_from_cpu_camera(Camera cpu_camera);
 
 int main(int argc, char** argv)
 {
@@ -54,8 +55,8 @@ int main(int argc, char** argv)
     loadGlad();
     setupCallbacks(window);
 
-    auto start_time = std::chrono::high_resolution_clock::now();
-
+    auto data_generation_start_time = std::chrono::high_resolution_clock::now();
+// start of data generation
     GLuint pbo = generatePBO();
     uchar3* cpu_grid = allocateCPUGrid();
 
@@ -66,7 +67,14 @@ int main(int argc, char** argv)
     sphere* spheres = generateSpheresOnCPU();
 
     Camera cpu_camera = Camera();
+// end of data generation
+    auto data_generation_end_time = std::chrono::high_resolution_clock::now();
+    auto data_generation_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(data_generation_end_time - data_generation_start_time);
+    printf("Generating the data on CPU took: %f ms\n", data_generation_duration.count() / (float)1000000);
 
+
+    auto data_copying_start_time = std::chrono::high_resolution_clock::now();
+// data copying 
     sphere** d_list = transferSpheresToGPU(spheres);
     hitable_list** d_world = allocateHitableList();
     camera** d_camera = allocateCamera();
@@ -94,10 +102,10 @@ int main(int argc, char** argv)
     cudaGraphicsGLRegisterBuffer(&cuda_pbo, pbo, cudaGraphicsRegisterFlagsWriteDiscard);
 
     hitable_list_cpu* world = new hitable_list_cpu(spheres, SPHERES_COUNT);
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
-    printf("Generating the data and copying to GPU took: %f ms\n", duration.count() / (float)1000000);
+// end of data copying
+    auto data_copying_end_time = std::chrono::high_resolution_clock::now();
+    auto data_copying_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(data_copying_end_time - data_copying_start_time);
+    printf("Copying of the data to GPU took: %f ms\n", data_copying_duration.count() / (float)1000000);
 
     double lastTime = glfwGetTime();
     int nbFrames = 0;
@@ -128,11 +136,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            vec3 up = cpu_camera.getUpVector();
-            vec3 origin = cpu_camera.getOrigin();
-            vec3 lookat = cpu_camera.getLookAt();
-
-            camera* cam = new camera(origin, lookat, up, 90.0f, 16.0f / 9.0f, 1.0f);
+            camera* cam = get_simplified_camera_from_cpu_camera(cpu_camera);
 
             render(cpu_grid, WINDOW_WIDTH, WINDOW_HEIGHT, spheres, world, cam, bvhNodes, indices, nodes_used, light_postions, light_colors);
             glBufferData(GL_PIXEL_UNPACK_BUFFER, 3 * WINDOW_WIDTH * WINDOW_HEIGHT * sizeof(GLubyte), cpu_grid, GL_STREAM_DRAW);
@@ -438,4 +442,13 @@ void rotate_lights_around_Y(float3* light_postions)
         float z = light_position.x * (-sin(angle)) + light_position.z * cos(angle);
         light_postions[i] = { x, light_position.y, z };
     }
+}
+
+camera* get_simplified_camera_from_cpu_camera(Camera cpu_camera)
+{
+    vec3 up = cpu_camera.getUpVector();
+    vec3 origin = cpu_camera.getOrigin();
+    vec3 lookat = cpu_camera.getLookAt();
+
+    return new camera(origin, lookat, up, 90.0f, 16.0f / 9.0f, 1.0f);
 }

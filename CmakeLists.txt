@@ -1,0 +1,60 @@
+cmake_minimum_required(VERSION 3.17)
+
+project(RayCastingCuda CXX C CUDA)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 17)
+
+find_package(OpenGL REQUIRED)
+
+add_executable(${CMAKE_PROJECT_NAME})
+
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/glad.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/kernel.cu
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/cpu_renderer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/glad_utils/glad_functions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/glfw_utils/glfw_functions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/glfw_utils/interactions.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui/imgui_demo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui/imgui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui/imgui_draw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui/imgui_tables.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui/imgui_widgets.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui/imgui_impl_glfw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui/imgui_impl_opengl3.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui_utils/imgui_utilites.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/opengl_util/opengl_util.cpp
+    )
+
+
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/
+    ${CMAKE_CURRENT_SOURCE_DIR}/Includes/
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/bvh_structures/
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/cuda_helpers/
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/glad_utils/
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/glfw_utils/
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui/
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/imgui_utils/
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/opengl_util/
+    ${CMAKE_CURRENT_SOURCE_DIR}/CSGCuda/)
+
+target_compile_options(${CMAKE_PROJECT_NAME}
+    PRIVATE $<$<COMPILE_LANGUAGE:CXX>: >
+    PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: >
+)
+
+add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/external/glfw )
+
+target_link_libraries( ${CMAKE_PROJECT_NAME} PRIVATE ${OPENGL_LIBRARY} glfw )
+
+# if(WIN32)
+#   target_link_libraries(${CMAKE_PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/Libraries/glfw3.lib)
+# endif()
+
+if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE _DEBUG)
+    target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)
+endif()
