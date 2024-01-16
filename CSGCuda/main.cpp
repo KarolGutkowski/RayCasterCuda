@@ -16,6 +16,7 @@
 #include "screen_dimensions.h"
 #include "imgui_utils/imgui_utilities.h"
 #include "cpu_renderer.h"
+#include <chrono>
 
 void displayMsPerFrame(double& lastTime);
 void drawTexture(int width, int height);
@@ -53,6 +54,8 @@ int main(int argc, char** argv)
     loadGlad();
     setupCallbacks(window);
 
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     GLuint pbo = generatePBO();
     uchar3* cpu_grid = allocateCPUGrid();
 
@@ -61,8 +64,6 @@ int main(int argc, char** argv)
     GLuint tex = generateTexture();
 
     sphere* spheres = generateSpheresOnCPU();
-    double lastTime = glfwGetTime();
-    int nbFrames = 0;
 
     Camera cpu_camera = Camera();
 
@@ -94,6 +95,12 @@ int main(int argc, char** argv)
 
     hitable_list_cpu* world = new hitable_list_cpu(spheres, SPHERES_COUNT);
 
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+    printf("Generating the data and copying to GPU took: %f ms\n", duration.count() / (float)1000000);
+
+    double lastTime = glfwGetTime();
+    int nbFrames = 0;
     while (!glfwWindowShouldClose(window))
     {
         processUserInputs(window, cpu_camera, rotate_lights);

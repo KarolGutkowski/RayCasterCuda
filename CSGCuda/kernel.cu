@@ -6,6 +6,7 @@
 #include <curand.h>
 #include <curand_kernel.h>
 #include "spheres_count.h"
+#include "gputimer.h"
 
 #define THREADS_X 16
 #define THREADS_Y 16
@@ -139,6 +140,9 @@ __global__ void destroy_camera(camera** d_camera)
 	delete* d_camera;
 }
 
+int measurements_count = 0;
+float sum_of_time_measurements = 0.0f;
+
 void launchKernel(uchar3* grid,
 	const int width,
 	const int height,
@@ -151,6 +155,9 @@ void launchKernel(uchar3* grid,
 	float3* light_postions,
 	float3* light_colors)
 {
+	GpuTimer timer = GpuTimer();
+
+	timer.Start();
 	dim3 blockDim = dim3(THREADS_X, THREADS_Y);
 	dim3 gridDim = dim3((width + THREADS_X - 1) / THREADS_X, (height + THREADS_Y - 1) / THREADS_Y);
 
@@ -159,6 +166,15 @@ void launchKernel(uchar3* grid,
 	destroy_camera << <1, 1 >> > (d_camera);
 
 	checkCudaErrors(cudaDeviceSynchronize());
+	timer.Stop();
+
+	sum_of_time_measurements += timer.Elapsed();
+	measurements_count++;
+
+	if (measurements_count % 280 == 0)
+	{
+		printf("Average to ray cast kernel time: %f ms\n", (sum_of_time_measurements / (float)measurements_count));
+	}
 }
 
 void create_world_on_gpu(sphere** d_list, hitable_list** d_world, camera** d_camera, Camera cpu_camera)
@@ -201,10 +217,6 @@ __host__ void update_camera_launcher(camera** d_camera, Camera cpu_camera)
 	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-__device__ vec3 randomOnGPU(curandState* localState)
-{
-	return vec3(curand_uniform(localState), curand_uniform(localState), curand_uniform(localState));
-}
 
 __global__ void create_world(sphere** d_list, hitable_list** d_world, camera** d_camera,
 				float originX, float originY, float originZ,
