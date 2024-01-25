@@ -17,6 +17,7 @@
 #include "imgui_utils/imgui_utilities.h"
 #include "cpu_renderer.h"
 #include <chrono>
+#include "imgui_utils/imgui_utilities.h"
 
 void displayMsPerFrame(double& lastTime);
 void drawTexture(int width, int height);
@@ -35,17 +36,16 @@ void* getMappedPointer(GLuint pbo, cudaGraphicsResource* cuda_pbo);
 float3* transferLightPositionsToGPU(float3* light_postions);
 float3* transferLightColorsToGPU(float3* light_colors);
 void generate_random_lights(float3* light_postions, float3* light_colors);
-void processUserInputs(GLFWwindow* window, Camera& cpu_camera, bool& rotate_lights);
+void processUserInputs(GLFWwindow* window, Camera& cpu_camera, bool& rotate_lights, float& rotation_speed_factor);
 uint32_t* transferIndicesToGPU(uint32_t* indices);
 void process_command_line_arguments(int argc, char** argv, bool& run_cpu);
-void rotate_lights_around_Y(float3* light_postions);
+void rotate_lights_around_Y(float3* light_postions, float rotation_speed);
 camera* get_simplified_camera_from_cpu_camera(Camera cpu_camera);
 
 int main(int argc, char** argv)
 {
     bool run_cpu = false;
     bool rotate_lights = false;
-
     process_command_line_arguments(argc, argv, run_cpu);
     
     initiaLizeGFLW();
@@ -109,13 +109,14 @@ int main(int argc, char** argv)
 
     double lastTime = glfwGetTime();
     int nbFrames = 0;
+    float rotationSpeedFactor = 1.0f;
     while (!glfwWindowShouldClose(window))
     {
-        processUserInputs(window, cpu_camera, rotate_lights);
+        processUserInputs(window, cpu_camera, rotate_lights, rotationSpeedFactor);
 
         if (rotate_lights)
         {
-            rotate_lights_around_Y(light_postions);
+            rotate_lights_around_Y(light_postions, rotationSpeedFactor);
         }
 
         if (!run_cpu) {
@@ -144,7 +145,6 @@ int main(int argc, char** argv)
         }
 
         drawTexture(WINDOW_WIDTH, WINDOW_HEIGHT);
-
         glfwSwapBuffers(window);
         displayMsPerFrame(lastTime);
     }
@@ -403,9 +403,9 @@ void generate_random_lights(float3* light_postions, float3* light_colors)
     light_colors[9] = { 1.0f, 0.0f, 0.0f };*/
 }
 
-void processUserInputs(GLFWwindow* window, Camera& cpu_camera, bool& rotate_lights)
+void processUserInputs(GLFWwindow* window, Camera& cpu_camera, bool& rotate_lights, float& rotation_speed_factor)
 {
-    processInput(window, cpu_camera, rotate_lights);
+    processInput(window, cpu_camera, rotate_lights, rotation_speed_factor);
     mouse_callback(window, cpu_camera);
     glfwPollEvents();
 }
@@ -432,9 +432,9 @@ void process_command_line_arguments(int argc, char** argv, bool& run_cpu)
     }
 }
 
-void rotate_lights_around_Y(float3* light_postions)
+void rotate_lights_around_Y(float3* light_postions, float rotation_speed)
 {
-    float angle = (0.2f * (float)glfwGetTime()) / 180.0f;
+    float angle = rotation_speed * (0.2f * (float)glfwGetTime()) / 180.0f;
     for (int i = 0; i < LIGHTS_COUNT; i++)
     {
         float3 light_position = light_postions[i];

@@ -9,7 +9,7 @@
 
 void initializeImGui(GLFWwindow* window);
 void destroyImGuiContext();
-void generateImGuiWindow(Camera& camera);
+void generateImGuiWindow(float& rotation_speed);
 void ImGuiNewFrame();
 void renderImGui();
 

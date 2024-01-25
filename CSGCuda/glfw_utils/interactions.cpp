@@ -13,7 +13,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 }
 
 float lastFrame = 0.0f;
-void processInput(GLFWwindow* window, Camera& camera, bool& rotate_lights) 
+void processInput(GLFWwindow* window, Camera& camera, bool& rotate_lights, float& rotation_speed_factor) 
 {
     rotate_lights = (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS);
 
@@ -31,6 +31,14 @@ void processInput(GLFWwindow* window, Camera& camera, bool& rotate_lights)
     }
     else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
         camera.ProcessKeyboard(Camera_Movement::RIGHT, deltaTime);
+    }
+    else if (glfwGetKey(window, GLFW_KEY_V) == GLFW_PRESS)
+    {
+        rotation_speed_factor += 0.01f;
+    }
+    else if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
+    {
+        rotation_speed_factor -= 0.01f;
     }
 }
 
