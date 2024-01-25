@@ -34,7 +34,7 @@ public:
         return *this;
     }
 
-    __host__ __device__ vec3& operator*=(double t) {
+    __host__ __device__ vec3& operator*=(float t) {
         e[0] *= t;
         e[1] *= t;
         e[2] *= t;
@@ -45,7 +45,7 @@ public:
         return *this *= 1 / t;
     }
 
-    __host__ __device__ double length() const {
+    __host__ __device__ float length() const {
         return sqrt(length_squared());
     }
 

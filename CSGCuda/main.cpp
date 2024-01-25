@@ -398,9 +398,6 @@ void generate_random_lights(float3* light_postions, float3* light_colors)
         light_postions[i] = { (i / 2.0f) - 5.0f, (i / 2.0f), (float)-i*5 };
         light_colors[i] = { get_random_in_normalized(), get_random_in_normalized(), get_random_in_normalized() };
     }
-
-    /*light_postions[9] = { 16.321367, 4.202590, -3.698214 };
-    light_colors[9] = { 1.0f, 0.0f, 0.0f };*/
 }
 
 void processUserInputs(GLFWwindow* window, Camera& cpu_camera, bool& rotate_lights, float& rotation_speed_factor)

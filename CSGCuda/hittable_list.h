@@ -77,10 +77,7 @@ public:
         return hit_anything;
     }
     sphere* list;
-    int list_size;
+    uint32_t list_size;
 };
-
-
-
 
 #endif

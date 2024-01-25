@@ -37,7 +37,7 @@ __device__ vec3 calculateColor(hit_record rec, ray r, float3* light_postions, fl
 
 __device__ vec3 get_color(
 	const ray& r, 
-	const hitable_list** world, 
+	hitable_list** world, 
 	BVHNode* nodes,
 	uint32_t* nodes_indices,
 	const uint32_t nodes_used, 
@@ -104,17 +104,6 @@ __global__ void color_grid_kernel(
 		return;
 
 	int idx = row * width + column;
-
-	/*if (threadIdx.x == 0 && blockIdx.x == 0)
-	{
-		for (int i = 0; i < nodes_used; i++)
-		{
-			if (bvh[i].spheresCount != 0)
-				printf("[%d] has %d spheres in it directly\n", i, bvh[i].spheresCount);
-			else 
-				printf("[%d] is an internal node and has children %d and %d \n", i, bvh[i].leftFirst, bvh[i].leftFirst+1);
-		}
-	}*/
 	
 	ray r = (*camera)->get_ray(column / (float)width, row / (float)height);
 	vec3 col = get_color(r, world, bvh, indicies ,nodes_used,light_postions, light_colors);
