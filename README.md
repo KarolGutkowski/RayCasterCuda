@@ -7,3 +7,4 @@
 <p>For contrast I've also developed a similar CPU algorithm which wasn't able to get anywhere close to the GPU speeds</p>
 
 ![10 000 spheres rendered in real-time (at around 50fps)](https://github.com/KarolGutkowski/RayCasterCuda/assets/90787864/a9ef10ba-1548-4fde-9c34-1369a09ca3e0)
+<center>10 000 spheres rendered in real-time (at around 50fps)</center>
