@@ -13,6 +13,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 }
 
 float lastFrame = 0.0f;
+int mouse_input_mode = GLFW_CURSOR_DISABLED;
 void processInput(GLFWwindow* window, Camera& camera, bool& rotate_lights, float& rotation_speed_factor) 
 {
     rotate_lights = (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS);
@@ -39,6 +40,15 @@ void processInput(GLFWwindow* window, Camera& camera, bool& rotate_lights, float
     else if (glfwGetKey(window, GLFW_KEY_C) == GLFW_PRESS)
     {
         rotation_speed_factor -= 0.01f;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS)
+    {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
+    else if(glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS)
+    {
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     }
 }
 
